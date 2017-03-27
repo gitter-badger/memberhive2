@@ -1,10 +1,12 @@
-import { Component, style, state, trigger, ElementRef, OnInit, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, ElementRef, OnInit, OnChanges, SimpleChanges } from '@angular/core';
+import { style, state, trigger } from '@angular/animations';
 import { Router } from '@angular/router';
+import { Observable } from 'rxjs/Observable';
 
 import { TitleService } from './common/title.service';
 import { AuthService } from './common/auth/auth.service';
 import { ShoutService } from "./common/shout.service";
-import { InteractionService } from "./common/interaction.service";
+import { InteractionService } from './common/interaction.service';
 
 import { Person } from './person/person';
 import { MdDialog, MdDialogRef, MdDialogConfig } from '@angular/material';
@@ -28,13 +30,11 @@ import { NoteCreateDialogComponent } from './note/dialogs/note-create.dialog';
                 'min-width': '75px',
                 'max-width': '75px'
             }))
-            /*transition('0 => 1', animate('200ms ease-in')),
-            transition('1 => 0', animate('200ms ease-out'))*/
         ])
     ],
     providers: [InteractionService]
 })
-export class ViewComponent implements OnInit, OnChanges {
+export class ViewComponent implements OnInit {
     private dialogRef: MdDialogRef<any>;
 
     routes: Object[] = [
@@ -50,8 +50,8 @@ export class ViewComponent implements OnInit, OnChanges {
     ];
 
     currentUser: Person;
-    myInteractions: Array<Note>;
-    myOutstanding: Array<Note>;
+    myInteractions: Observable<Note[]>;
+    myOutstanding: Observable<Note[]>;
 
     alwaysVisible: boolean = false;
     drawerVisible: boolean = false;
@@ -68,15 +68,11 @@ export class ViewComponent implements OnInit, OnChanges {
 
     ngOnInit(): void {
         this.currentUser = this._auth.getCurrentUser();
-        this._noteService.getMyInteractions()
-            .subscribe((notes: Array<Note>) => {
-                this.myInteractions = notes;
-                this.myOutstanding = this.myInteractions.filter((n: Note) => n.dueOn && !n.actions.doneOn);
-            });
-    }
-
-    ngOnChanges(change: SimpleChanges): void {
-        // console.log(change);
+        this.myInteractions = this._interactionService.myInteractions;
+        this.myOutstanding = this.myInteractions.map((n: Note[]) =>
+            n.filter((n: Note) => n.dueOn && (!n.actions.doneOn && !n.actions.completedOn))
+        );
+        this._interactionService.loadMy();
     }
 
     toggleAlwaysVisible(): void {
@@ -112,7 +108,7 @@ export class ViewComponent implements OnInit, OnChanges {
         this.dialogRef = this._dialog.open(NoteCreateDialogComponent, config);
         this.dialogRef.afterClosed().subscribe((result: any) => {
             if (result instanceof Note) {
-                this.myInteractions.push(result);
+                this._interactionService.create(result);
                 this._shoutService.success('Interaction created!');
             }
             this.dialogRef = undefined;
